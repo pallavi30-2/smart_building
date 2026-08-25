@@ -13,6 +13,16 @@ pipeline {
             }
         }
 
+        stage('Verify Docker') {
+            steps {
+                sh '''
+                    set -e
+                    docker --version
+                    docker compose version
+                '''
+            }
+        }
+
         stage('Build Applications') {
             parallel {
                 stage('Build Frontend') {
@@ -80,7 +90,13 @@ PY
 
     post {
         always {
-            sh 'docker compose down --remove-orphans'
+            sh '''
+                if command -v docker >/dev/null 2>&1; then
+                    docker compose down --remove-orphans || true
+                else
+                    echo "Docker CLI not available on this Jenkins agent; skipping cleanup."
+                fi
+            '''
         }
     }
 }
