@@ -17,12 +17,12 @@ pipeline {
             parallel {
                 stage('Build Frontend') {
                     steps {
-                        bat 'docker compose build frontend'
+                        sh 'docker compose build frontend'
                     }
                 }
                 stage('Build Backend') {
                     steps {
-                        bat 'docker compose build backend'
+                        sh 'docker compose build backend'
                     }
                 }
             }
@@ -30,7 +30,7 @@ pipeline {
 
         stage('Run Tests') {
             steps {
-                bat 'docker compose run --rm backend python -m unittest discover -s . -p "test_*.py"'
+                sh 'docker compose run --rm backend python -m unittest discover -s . -p "test_*.py"'
             }
         }
 
@@ -38,12 +38,12 @@ pipeline {
             parallel {
                 stage('Frontend Image') {
                     steps {
-                        bat 'docker image inspect smart-building-platform-frontend'
+                        sh 'docker image inspect smart-building-platform-frontend'
                     }
                 }
                 stage('Backend Image') {
                     steps {
-                        bat 'docker image inspect smart-building-platform-backend'
+                        sh 'docker image inspect smart-building-platform-backend'
                     }
                 }
             }
@@ -51,21 +51,36 @@ pipeline {
 
         stage('Docker Compose') {
             steps {
-                bat 'docker compose up -d'
-                bat 'docker compose ps'
+                sh 'docker compose up -d'
+                sh 'docker compose ps'
             }
         }
 
         stage('Live Application Smoke Test') {
             steps {
-                bat 'powershell -NoProfile -Command "$api = Invoke-RestMethod http://localhost:8000/health; if (-not $api.status) { exit 1 }; $page = Invoke-WebRequest http://localhost:8080 -UseBasicParsing; if ($page.StatusCode -ne 200) { exit 1 }"'
+                sh '''
+                    set -e
+                    python3 - <<'PY'
+import json
+import urllib.request
+
+with urllib.request.urlopen('http://localhost:8000/health', timeout=20) as response:
+    payload = json.load(response)
+    if not payload.get('status'):
+        raise SystemExit(1)
+
+with urllib.request.urlopen('http://localhost:8080', timeout=20) as response:
+    if response.status != 200:
+        raise SystemExit(1)
+PY
+                '''
             }
         }
     }
 
     post {
         always {
-            bat 'docker compose down --remove-orphans'
+            sh 'docker compose down --remove-orphans'
         }
     }
 }
